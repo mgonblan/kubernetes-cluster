@@ -1,51 +1,50 @@
 # Welcome
+  In this guide you will learn about creating a kubernetes cluster with virtual machines.
+  There is two ways:
+  1. The soft Way.
+  2. The Hard way.
+
 # Steps to perform the Deployment
 0. Prerequisites
 1. Install Kubernetes on Master and slave.
 4. Add Slave node.
 5. Install the Kubernetes Dashboard.
 - ## Prerequisites:
+  To deploy a kubernetes cluster on premise, first, have to define several things:
+ 
   this work must be done in both master and worker node.
   edit /etc/hosts on all nodes to add the hostname and internal ip 
-  example:
-  ```
+  ```/etc/hosts
      127.0.0.1 localhost
      # (New) Add these names
      [master-internal-ip]    [master-hostname]
      [node-0-internal-ip]    [node-0-hostname]
+     [access-external-ip]    [access-domain-name] [access-hostname]
      ...
      # (new-end)
-     # The following lines are desirable for IPv6 capable hosts
-     ::1 ip6-localhost ip6-loopback
-     fe00::0 ip6-localnet
-     ff00::0 ip6-mcastprefix
-     ff02::1 ip6-allnodes
-     ff02::2 ip6-allrouters
-     ff02::3 ip6-allhosts
   ```  
 ## Install CRI
-In Both nodes install: 
-- Docker with Containerd:
-In master and slave:
-* Install Pre-requisites:
- ```shell
-  $ sudo apt-get update
-  $ sudo apt-get install \
+In Both nodes install Docker with Containerd:
+1. Install Pre-requisites:
+ * Copy and paste this code: 
+  ```shell
+    $ sudo apt-get update
+    $ sudo apt-get install \
     apt-transport-https \
     ca-certificates \
     curl \
     gnupg-agent \
-    software-properties-common
+    software-properties-common -y
   ```
 * Add Docker Repo
  ```shell
  $ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
  ```
  ```shell
- # [Optional] Check the GPG key
+ # [Check the GPG key
  $ sudo apt-key fingerprint 0EBFCD88
  ```
--  Let's Select the Stable channel (we don't want any surprise)
+* Let's Select the Stable channel: (we don't want any surprise)
 ```shell
 $ sudo add-apt-repository \
    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
@@ -55,7 +54,7 @@ $ sudo add-apt-repository \
 * Instal the docker packages
 ```shell
 $ sudo apt-get update
-$ sudo apt-get install docker-ce docker-ce-cli containerd.io
+$ sudo apt-get install docker-ce docker-ce-cli containerd.io -y
 ```
 * Check the correct install of Docker engine
 ```shell
@@ -79,7 +78,7 @@ systemctl daemon-reload
 systemctl start docker
 systemctl daemon-reload
 ```
-* It's convenient to create a new user for docker and kubernetes with this command:
+*  Create a new user for docker and kubernetes with this command/modify an user to work with docker:
 ```shell
    $ useradd [username] # It adds the user
    $ passwd [username] # It will ask for a password
@@ -88,6 +87,10 @@ systemctl daemon-reload
    $ su [username]
    $ docker run hello-world #if output is correct, you will get the next result:
 ```
+     - modify an user to work with docker:
+     ```shell
+        usermod -aG docker [username]
+     ```
 the output:
 ````
 Hello from Docker!
@@ -111,10 +114,10 @@ Share images, automate workflows, and more with a free Docker ID:
 For more examples and ideas, visit:
  https://docs.docker.com/get-started/
 ````
-- Configure Containerd:
+* Configure Containerd:
 Now we'll configure containerd with docker
 ```shell
-   cat > /etc/modules-load.d/containerd.conf <<EOF
+cat > /etc/modules-load.d/containerd.conf <<EOF
 overlay
 br_netfilter
 EOF
@@ -130,15 +133,25 @@ net.bridge.bridge-nf-call-ip6tables = 1
 EOF
 
 sysctl --system
-# Configure containerd
 mkdir -p /etc/containerd
 containerd config default > /etc/containerd/config.toml
-# edit /etc/containerd/config.toml to change systemd_cgroup = false
-# to systemd_cgroup = true
- systemctl daemon-reload
- systemctl restart containerd
- systemctl enable containerd
 ```
+edit /etc/containerd/config.toml to cange:
+```toml
+[plugins.cri]
+systemd_cgroup = false
+```
+for:
+```toml
+[plugins.cri]
+systemd_cgroup = true
+```
+and
+```shell
+systemctl start containerd
+systemctl enable containerd
+```
+
 - Install and configure kubernetes servers:
 # prerequisites:
 ```shell
@@ -153,14 +166,15 @@ sudo sysctl --system
    sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
    sudo swapoff -a
 ```
-
+- install kubernetes packages:
 ```shell
-# Install kubernetes:
+
    sudo apt update
    sudo apt -y install curl apt-transport-https
    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
    echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
    #Install kubelet, kubeadm, kubectl
+   sudo apt-get update
    sudo apt -y install vim git curl wget kubelet kubeadm kubectl
    sudo apt-mark hold kubelet kubeadm kubectl
    #Check the right version:
@@ -175,11 +189,11 @@ sudo sysctl --system
    sudo systemctl enable kubelet
    # Pull init containers
    sudo kubeadm config images pull
-```
+```      
 - Create cluster (as [username]):
 ```shell
-   # On master node:
-kubeadm init --control-plane-endpoint=[external-cluster-ip] --api-server-advertise-address=[internal-ip-host] \ pod-network-cidr=10.244.0.0/16
+   # On master node for flannel:
+kubeadm init --control-plane-endpoint=[access-external-ip] --pod-network-cidr=[network-zone] --apiserver-advertise-address=master-internal-ip
 ```
 The output should be:
 ```
@@ -250,9 +264,15 @@ as root:
   kubeadm join <control-plane-host>:<control-plane-port> --token <token> --discovery-token-ca-cert-hash sha256:<hash>
 ```
 - Before joining any node, Add Network drivers for kubernetes:
-  <i href="https://docs.projectcalico.org/getting-started/kubernetes/flannel/flannel">follow the next instructions to install flannel network drivers</i>
-  taint nodes to add the master node working:
-  kubectl taint nodes --all node-role.kubernetes.io/master-
+In our case we'll use weave net, an open source tool that provide us networking.
+  to do so simply type:
+  ```shell
+     kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+  ```
+  and perform a 
+  ```shell 
+  kubectl get pods --all-namespaces 
+  ```
 - add a Worker node:
 If you want to add a worker node, you must use the join sentence before
 ```shell
@@ -267,9 +287,17 @@ If you want to add a worker node, you must use the join sentence before
    # to check the status of nodes
    kubectl get nodes
 ```
-This will show something like this:
-<img src="./kubectl-get-nodes.png" />
-
+# Isolate control plane node:
+```bash
+   kubectl taint nodes --all node-role.kubernetes.io/master-
+```
+# Add new working nodes:
+  To add new working nodes, the working nodes must be added to /etc/hosts file
+  and they must be in the same network.
+  To perform this option type:
+  ```bash
+     kubeadm join <control-plane-host>:<control-plane-port> --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+  ```
 Both nodes should appear in "<Ready>" state.
 
 # Install Control panel
@@ -288,7 +316,8 @@ On your kubectl client:
 ```
 2. apply the web-UI file:
 ```shell
-   kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0/aio/deploy/recommended.yaml
+kubectl create secret generic kubernetes-dashboard-certs --from-file=$HOME/certs -n kubernetes-dashboard
+   kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.4/aio/deploy/recommended.yaml
 
 ```
    when finished creating all services, pods and ingress, you have to create a user
@@ -334,7 +363,7 @@ Name:         admin-user-token-v57nw
 Namespace:    kubernetes-dashboard
 Labels:       <none>
 Annotations:  kubernetes.io/service-account.name: admin-user
-              kubernetes.io/service-account.uid: 0303243c-4040-4a58-8a47-849ee9ba79c1
+              kubernetes.io/service-account.uid: [account-id]
 
 Type:  kubernetes.io/service-account-token
 
@@ -342,7 +371,7 @@ Data
 ====
 ca.crt:     1066 bytes
 namespace:  20 bytes
-token:      eyJhbGciOiJSUzI1NiIsImtpZCI6IiJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlcm5ldGVzLWRhc2hib2FyZCIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi11c2VyLXRva2VuLXY1N253Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQubmFtZSI6ImFkbWluLXVzZXIiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC51aWQiOiIwMzAzMjQzYy00MDQwLTRhNTgtOGE0Ny04NDllZTliYTc5YzEiLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6a3ViZXJuZXRlcy1kYXNoYm9hcmQ6YWRtaW4tdXNlciJ9.Z2JrQlitASVwWbc-s6deLRFVk5DWD3P_vjUFXsqVSY10pbjFLG4njoZwh8p3tLxnX_VBsr7_6bwxhWSYChp9hwxznemD5x5HLtjb16kI9Z7yFWLtohzkTwuFbqmQaMoget_nYcQBUC5fDmBHRfFvNKePh_vSSb2h_aYXa8GV5AcfPQpY7r461itme1EXHQJqv-SN-zUnguDguCTjD80pFZ_CmnSE1z9QdMHPB8hoB4V68gtswR1VLa6mSYdgPwCHauuOobojALSaMc3RH7MmFUumAgguhqAkX3Omqd3rJbYOMRuMjhANqd08piDC3aIabINX6gP5-Tuuw2svnV6NYQ
+token:     [sha-256-page]
 ```
 - enter on kubernetes web UI page:
 in kubernetes client terminal:
@@ -355,3 +384,54 @@ put the next in your web browser:
 and paste the token that you got in the previous step.
 
 now you can see the kubernetes web UI
+
+Also, if you want a better alternative, you want to test weave net. To do so, simply use:
+```shell
+kubectl apply -f "https://cloud.weave.works/k8s/scope.yaml?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+```
+then do a port-forward to access the weave.net service:
+```bash
+kubectl port-forward -n weave "$(kubectl get -n weave pod --selector=weave-scope-component=app -o jsonpath='{.items..metadata.name}')" 4040
+```
+and put in your browser:
+```url
+ https://localhost:4040
+```
+- Installing Gluster on each node:
+    
+    - ```shell
+         apt install software-properties-common
+         add-apt-repository ppa:gluster/glusterfs-7
+         apt update
+         apt install glusterfs-server
+      ```
+      install the client:
+      ```shell
+      sudo apt-get install glusterfs-client
+      ``` 
+      check the nodes if gluster is installed:
+      ```shell
+       for i in dm_snapshot dm_mirror dm_thin_pool; do sudo modprobe $i; done
+       sudo lsmod |  egrep 'dm_snapshot|dm_mirror|dm_thin_pool'
+       glusterfs --version
+      ```
+      
+## Testing the cluster
+### Installing Helm
+Helm is a package manager that helps to install applications on the kubernetes cluster.
+It is installed on local (Download the desired version from [this site](https://github.com/helm/helm/releases) and you have to select the binary that is compatibe with your client.
+
+Once you installed helm, then add this repository:
+```shell
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm search repo bitnami
+helm install my-release bitnami/[chart]
+```
+in our case we want to test the cluster with wordpress chart, so we type:
+```shell
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm search repo bitnami
+helm install my-release bitnami/wordpress [params]
+## The easy way: Rancher
+Rancher is a docker solution that make easyer the cluster implementation.
+Deploying a cluster with rancher is easy, simply following these steps:
