@@ -432,6 +432,3 @@ in our case we want to test the cluster with wordpress chart, so we type:
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm search repo bitnami
 helm install my-release bitnami/wordpress [params]
-## The easy way: Rancher
-Rancher is a docker solution that make easyer the cluster implementation.
-Deploying a cluster with rancher is easy, simply following these steps:
