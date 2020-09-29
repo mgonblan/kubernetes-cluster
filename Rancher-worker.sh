@@ -44,9 +44,9 @@ sysctl --system
 mkdir -p /etc/containerd
 containerd config default > /etc/containerd/config.toml
 sed -i 's/systemd_cgroup = false/systemd_cgroup = true/g' /etc/containerd/config.toml
-systemctl start docker && 
-systemctl start containerd && \
-systemctl enable docker && \
+systemctl start docker 
+systemctl enable docker
+systemctl start containerd
 systemctl enable containerd
 # Install kubernetes:
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf

@@ -74,6 +74,8 @@ apt-get update
 apt-get install -y kubelet kubeadm kubectl
 apt-mark hold kubelet kubeadm kubectl
 systemctl daemon-reload
-systemctl enable kubelet
 systemctl restart kubelet
+systemctl enable kubelet
 kubeadm config images pull
+# Initialize the master node
+kubeadm init --contro-plane-endpoint=control-plane-endpoint
