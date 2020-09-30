@@ -397,31 +397,59 @@ and put in your browser:
 ```url
  https://localhost:4040
 ```
-- Installing Gluster on each node:
-    
-    - ```shell
-         apt install software-properties-common
-         add-apt-repository ppa:gluster/glusterfs-7
-         apt update
-         apt install glusterfs-server
-      ```
-      install the client:
-      ```shell
-      sudo apt-get install glusterfs-client
-      ``` 
-      check the nodes if gluster is installed:
-      ```shell
-       for i in dm_snapshot dm_mirror dm_thin_pool; do sudo modprobe $i; done
-       sudo lsmod |  egrep 'dm_snapshot|dm_mirror|dm_thin_pool'
-       glusterfs --version
-      ```
-      
-## Testing the cluster
 ### Installing Helm
 Helm is a package manager that helps to install applications on the kubernetes cluster.
 It is installed on local (Download the desired version from [this site](https://github.com/helm/helm/releases) and you have to select the binary that is compatibe with your client.
 
-Once you installed helm, then add this repository:
+## Configure Longhorn
+Longhorn is a store service that help you to manage the storage of your cluster.
+## Installing Longhorn
+Once you installed helm in your local workstation, proceed to install longhorn:
+```shell
+kubectl create namespace longhorn-system
+helm install longhorn longhorn/longhorn --namespace longhorn-system
+```
+to check if all longhorn deployment is installed run this command:
+```shell
+   kubectl -n longhorn-system get pods
+   # and all longhorn pods must be in "Running" state.
+```
+let's create an ingress to the cluster service:
+1. Create a basic auth file auth. It’s important the file generated is named auth (actually - that the secret has a key data.auth), otherwise the Ingress returns a 503.
+```shell
+   USER=<USERNAME_HERE>; PASSWORD=<PASSWORD_HERE>; echo "${USER}:$(openssl passwd -stdin -apr1 <<< ${PASSWORD})" >> auth
+```
+2. Create a secret:
+```shell
+   kubectl -n longhorn-system create secret generic basic-auth --from-file=auth
+```
+3. Create a file called ingress.yaml with this content:
+```YAML
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: longhorn-ingress
+  namespace: longhorn-system
+  annotations:
+    # type of authentication
+    nginx.ingress.kubernetes.io/auth-type: basic
+    # prevent the controller from redirecting (308) to HTTPS
+    nginx.ingress.kubernetes.io/ssl-redirect: 'false'
+    # name of the secret that contains the user/password definitions
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth
+    # message to display with an appropriate context why the authentication is required
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required '
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        backend:
+          serviceName: longhorn-frontend
+          servicePort: 80
+```
+and 
+## Testing the cluster
 ```shell
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm search repo bitnami
@@ -429,6 +457,12 @@ helm install my-release bitnami/[chart]
 ```
 in our case we want to test the cluster with wordpress chart, so we type:
 ```shell
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm search repo bitnami
-helm install my-release bitnami/wordpress [params]
+helm install my-release bitnami/wordpress
+```
+##Create ELK cluster:
+to create an ELK cluster, simply type:
+```shell
+   helm install elasticsearch elastic/elasticsearch
+```
+and wait for the post are all in running state.
+You must put port forwarding of the kibana service.

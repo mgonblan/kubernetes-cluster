@@ -3,12 +3,12 @@
 # First of all Install Docker as README.md
 # Run as root
 sed -i 's/bionic/focal/g' /etc/apt/sources.list
-apt-get update && apt-get upgrade -y && \
+apt-get update && apt-get upgrade -y && apt-get dist-upgrade -y
 apt-get install apt-transport-https \
     ca-certificates \
     curl \
     gnupg-agent \
-    software-properties-common -y && \
+    software-properties-common -y
 (curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -) && \
 apt-key fingerprint 0EBFCD88 && \
 add-apt-repository \
@@ -44,9 +44,9 @@ sysctl --system
 mkdir -p /etc/containerd
 containerd config default > /etc/containerd/config.toml
 sed -i 's/systemd_cgroup = false/systemd_cgroup = true/g' /etc/containerd/config.toml
-systemctl start docker && 
-systemctl start containerd && \
-systemctl enable docker && \
+systemctl start docker 
+systemctl enable docker
+systemctl start containerd
 systemctl enable containerd
 # Install kubernetes:
 cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
@@ -78,4 +78,4 @@ systemctl restart kubelet
 systemctl enable kubelet
 kubeadm config images pull
 # Initialize the master node
-kubeadm init --contro-plane-endpoint=control-plane-endpoint
+kubeadm init --control-plane-endpoint=control-plane-endpoint

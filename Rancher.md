@@ -12,4 +12,5 @@ Deploying a cluster with rancher is easy, simply following these steps:
      # (new-end)
   ```
 - Then install rke on this way:
-  run Rancher.sh, it installs docker and containerd
+  run Rancher-master.sh in master and Rancher-worker.sh in the worker node, these scripts will configure the servers to work with rancher and configure a one-node kubernetes cluster.
+  
