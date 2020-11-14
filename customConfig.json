@@ -1,0 +1,4 @@
+{
+  "fileUris": ["https://raw.githubusercontent.com/mgonblan/kubernetes-cluster/master/init-master.sh"],
+  "commandToExecute": "./init-master.sh"
+}
